@@ -1,0 +1,16 @@
+# One domain per line. Optional first number = seconds to wait before this lookup.
+# Lines are answered by both caches; the AI cache learns from demo/input/history.csv.
+www.youtube.com
+0.4 i.ytimg.com
+0.3 yt3.ggpht.com
+3 github.com
+0.5 github.githubassets.com
+0.2 avatars.githubusercontent.com
+5 stackoverflow.com
+0.4 cdn.sstatic.net
+0.3 i.sstatic.net
+8 www.youtube.com
+0.4 i.ytimg.com
+4 en.wikipedia.org
+0.5 upload.wikimedia.org
+6 www.iana.org

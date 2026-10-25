@@ -1,0 +1,16 @@
+{
+  "name": "synth",
+  "seed": 7,
+  "synth": {"hours": 48, "n_clients": 40, "n_apps": 60},
+  "trace_csv": null,
+  "ttl_csv": null,
+  "windows_h": {"train": [0, 24], "validation": [24, 32], "test": [32, 48]},
+  "decision_lead_s": 2.0,
+  "upstream": {"median_ms": 45.0, "slow_prob": 0.06, "default_ttl": 300},
+  "refresh_model": {"threshold": 0.5, "dagger_rounds": 2, "min_prefetch_precision": 0.7},
+  "followup_model": {"window_s": 30, "min_support": 5, "threshold": 0.7},
+  "capacities": [null, 40],
+  "threshold_sweep": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+  "replay_minutes": 20,
+  "replay_start_h": 43
+}

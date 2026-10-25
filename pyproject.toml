@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dnscache"
+version = "1.0.0"
+description = "AI-assisted DNS cache optimisation and query prediction"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scikit-learn>=1.3"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dnscache = ["dashboard/template.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

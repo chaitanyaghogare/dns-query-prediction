@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS Cache Dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2; --surface: #fcfcfb; --border: #e3e1db; --grid: #ecebe6;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #85837d;
+  --base: #eb6834; --ai: #2a78d6; --accent-soft: #e6effa;
+  --good: #1f7a3a; --good-bg: #e3f3e7; --bad: #b42318; --bad-bg: #fbe7e5; --wait: #8a5a00; --wait-bg: #fbf0d9;
+  --diff: #fff7df;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --border: #2f2e2b; --grid: #262523;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d85;
+    --base: #d95926; --ai: #3987e5; --accent-soft: #1d2a3b;
+    --good: #6cc785; --good-bg: #183222; --bad: #f08a80; --bad-bg: #3a1c19; --wait: #e8b75a; --wait-bg: #3a2e14;
+    --diff: #2a2614;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --border: #2f2e2b; --grid: #262523;
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d85;
+  --base: #d95926; --ai: #3987e5; --accent-soft: #1d2a3b;
+  --good: #6cc785; --good-bg: #183222; --bad: #f08a80; --bad-bg: #3a1c19; --wait: #e8b75a; --wait-bg: #3a2e14;
+  --diff: #2a2614;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 20px 16px 0; max-width: 1240px; margin: 0 auto; }
+h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--text-2); margin: 0 0 14px; }
+nav { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+nav button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font: inherit; color: var(--text-2); cursor: pointer; }
+nav button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--ai); font-weight: 600; }
+main { max-width: 1240px; margin: 0 auto; padding: 16px; }
+.grid { display: grid; gap: 14px; }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: 2fr 1fr; }
+@media (max-width: 900px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g2, .g3 { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-width: 0; }
+.card h2 { font-size: 14px; margin: 0 0 2px; }
+.card .note { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.kpi .label { color: var(--text-2); font-size: 12px; }
+.kpi .pair { display: flex; gap: 14px; align-items: baseline; margin-top: 6px; flex-wrap: wrap; }
+.kpi .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .who { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.controls button, .controls select { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.controls button.primary { background: var(--ai); border-color: var(--ai); color: #fff; }
+.clock { font-variant-numeric: tabular-nums; font-weight: 600; margin-left: auto; }
+.progress { height: 4px; background: var(--grid); border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
+.progress div { height: 100%; background: var(--ai); width: 0; }
+.scroll { max-height: 360px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-size: 12px; color: var(--text-2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+td.num, th.num { text-align: right; }
+td.name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+tr.diff td { background: var(--diff); }
+tr.hl td { background: var(--accent-soft); font-weight: 600; }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; min-width: 42px; text-align: center; }
+.b-hit { background: var(--good-bg); color: var(--good); }
+.b-miss { background: var(--bad-bg); color: var(--bad); }
+.b-wait { background: var(--wait-bg); color: var(--wait); }
+.bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.bar div { height: 100%; background: var(--ai); border-radius: 4px; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); margin-bottom: 6px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--text-2); font-size: 11px; }
+.tip { position: fixed; pointer-events: none; background: var(--text); color: var(--bg); padding: 6px 8px; border-radius: 6px; font-size: 12px; display: none; z-index: 10; max-width: 260px; }
+pre { font-size: 11.5px; overflow: auto; max-height: 360px; background: var(--bg); padding: 10px; border-radius: 8px; margin: 0; }
+.finding { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.finding:last-child { border-bottom: 0; }
+.tag { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; height: fit-content; white-space: nowrap; background: var(--grid); color: var(--text-2); min-width: 98px; text-align: center; }
+.tag.Measured { background: var(--accent-soft); color: var(--ai); }
+.tag.Verdict { background: var(--good-bg); color: var(--good); }
+ul.plain { margin: 0; padding-left: 18px; color: var(--text-2); }
+ul.plain li { margin: 3px 0; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: var(--surface); color: var(--text-2); padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ai); color: #fff; }
+.row-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; flex-wrap: wrap; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AI-assisted DNS cache</h1>
+  <p class="sub" id="subtitle"></p>
+  <nav role="tablist">
+    <button role="tab" aria-selected="true" data-tab="live">Live replay</button>
+    <button role="tab" aria-selected="false" data-tab="results">Results &amp; insights</button>
+  </nav>
+</header>
+<main>
+<!-- ============================================================ LIVE -->
+<section id="tab-live">
+  <div class="controls">
+    <button class="primary" id="play">Play</button>
+    <button id="restart">Restart</button>
+    <label>Speed <select id="speed"><option value="1">1×</option><option value="5">5×</option><option value="20" selected>20×</option><option value="60">60×</option></select></label>
+    <span class="clock" id="clock">—</span>
+  </div>
+  <div class="progress"><div id="prog"></div></div>
+  <div class="grid g4">
+    <div class="card kpi"><div class="label">Lookups so far</div><div class="pair"><span class="v" id="k-n">0</span></div></div>
+    <div class="card kpi"><div class="label">Cache hit rate</div><div class="pair" id="k-hit"></div></div>
+    <div class="card kpi"><div class="label">Average lookup time</div><div class="pair" id="k-lat"></div></div>
+    <div class="card kpi"><div class="label">Upstream queries (incl. prefetches)</div><div class="pair" id="k-up"></div></div>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card">
+      <h2>Lookups as they arrive</h2>
+      <p class="note">Same lookups, two caches. Highlighted rows are where the AI cache answered differently.</p>
+      <div class="scroll"><table><thead><tr><th>Time</th><th>Client</th><th>Domain</th><th>Normal</th><th class="num">ms</th><th>AI cache</th><th class="num">ms</th></tr></thead><tbody id="feed"></tbody></table></div>
+    </div>
+    <div class="grid" style="align-content:start">
+      <div class="card">
+        <h2>Hit rate over the replay</h2>
+        <div class="legend"><span><i class="dot" style="background:var(--base)"></i>Normal cache</span><span><i class="dot" style="background:var(--ai)"></i>AI cache</span></div>
+        <div id="live-chart"></div>
+      </div>
+      <div class="card">
+        <h2>Model decisions</h2>
+        <p class="note">Entry about to expire: refresh it or let it go? Confidence = predicted chance it is asked for again.</p>
+        <div class="scroll" style="max-height:200px"><table><thead><tr><th>Domain</th><th>Confidence</th><th>Action</th></tr></thead><tbody id="decisions"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h2>Prefetched domains</h2>
+    <p class="note">Background fetches made by the AI cache. "follow-up" = predicted from the domain just looked up (transition probability); "refresh" = renewed before expiry by the decision tree.</p>
+    <div class="scroll" style="max-height:220px"><table><thead><tr><th>Time</th><th>Domain</th><th>Why</th><th class="num">Probability</th></tr></thead><tbody id="prefetches"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ============================================================ RESULTS -->
+<section id="tab-results" class="hidden">
+  <div class="grid g4" id="headline"></div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="row-head">
+      <div><h2>All strategies on the test window</h2><p class="note" id="test-note"></p></div>
+      <div class="seg" id="capseg"></div>
+    </div>
+    <div style="overflow:auto"><table id="cmp"></table></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Cache hit rate</h2><p class="note">Share of lookups answered straight from the cache.</p><div id="c-hit"></div></div>
+    <div class="card"><h2>Average lookup time (ms)</h2><p class="note">Lower is better. Hits cost 0.5 ms; misses cost a trip upstream.</p><div id="c-lat"></div></div>
+    <div class="card"><h2>Upstream queries per lookup</h2><p class="note">What the cache costs the network: demand misses plus background prefetches.</p><div class="legend"><span><i class="dot" style="background:var(--text-2)"></i>Demand misses</span><span><i class="dot" style="background:var(--ai)"></i>Prefetches</span></div><div id="c-up"></div></div>
+    <div class="card"><h2>Hit rate vs network cost</h2><p class="note">Up-and-left is better. The line is the AI cache at different confidence thresholds.</p><div id="c-trade"></div></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Hit rate by hour of the test window</h2>
+    <div class="legend"><span><i class="dot" style="background:var(--base)"></i>Normal cache</span><span><i class="dot" style="background:var(--ai)"></i>AI cache (final)</span></div>
+    <div id="c-hour"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px"><h2>Findings</h2><div id="findings"></div></div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Refresh model: offline accuracy</h2><p class="note" id="ml-note"></p><div style="overflow:auto"><table id="mltab"></table></div></div>
+    <div class="card"><h2>What the decision tree looks at</h2><p class="note">Feature importance of the final tree.</p><div id="c-imp"></div></div>
+    <div class="card"><h2>Strongest follow-up pairs</h2><p class="note" id="fu-note"></p><div class="scroll" style="max-height:300px"><table id="pairs"></table></div></div>
+    <div class="card"><h2>Decision tree rules</h2><p class="note">The whole refresh model, readable. class 1 = refresh.</p><pre id="rules"></pre></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Limitations</h2><ul class="plain">
+      <li>Evaluation is trace replay in a simulator, not a production resolver; upstream latency is modelled, not measured.</li>
+      <li>The default dataset is synthetic. Its page-load structure is cleaner than real traffic, so gains are likely optimistic.</li>
+      <li>Prefetching costs extra upstream queries; the threshold trades hit rate against that cost.</li>
+      <li>The follow-up model only knows pairs seen at least 5 times in training; new sites get no prediction.</li>
+      <li>Refresh decisions change future data (policy shift); two DAgger-style retraining rounds reduce, not remove, this.</li>
+    </ul></div>
+    <div class="card"><h2>Future work</h2><ul class="plain">
+      <li>Run the same pipeline on a real capture (the tshark adapter is ready).</li>
+      <li>Per-client follow-up models, and prefetch only when the upstream is idle.</li>
+      <li>Adapt the threshold online from the measured prefetch precision.</li>
+      <li>Deploy the logging forwarder on a lab network and compare live numbers with the simulator.</li>
+    </ul></div>
+  </div>
+</section>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const $ = s => document.querySelector(s);
+const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const k in attrs) e.setAttribute(k, attrs[k]); e.innerHTML = html; return e; };
+const pct = (x, d = 1) => x == null ? "—" : (x * 100).toFixed(d) + "%";
+const fx = (x, d = 1) => x == null ? "—" : Number(x).toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const clock = t => { const d = Math.floor(t / 86400), s = t % 86400, h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = Math.floor(s % 60);
+  return `${DAYS[d % 7]} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const tip = $("#tip");
+function showTip(ev, html) { tip.innerHTML = html; tip.style.display = "block"; const x = Math.min(ev.clientX + 12, innerWidth - 270); tip.style.left = x + "px"; tip.style.top = (ev.clientY + 12) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+
+// ---------------------------------------------------------------- tabs
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
+  $("#tab-live").classList.toggle("hidden", b.dataset.tab !== "live");
+  $("#tab-results").classList.toggle("hidden", b.dataset.tab !== "results");
+  if (b.dataset.tab === "results") drawResults();
+});
+
+const W = DATA.windows_h;
+$("#subtitle").textContent = `Dataset "${DATA.config_name}": ${DATA.quality.rows.toLocaleString()} lookups, ${DATA.quality.distinct_keys.toLocaleString()} domains, ${DATA.quality.clients} clients over ${DATA.quality.duration_h} h. Trained on hours ${W.train[0]}–${W.train[1]}, tuned on ${W.validation[0]}–${W.validation[1]}, tested on ${W.test[0]}–${W.test[1]}.`;
+
+// ---------------------------------------------------------------- svg helpers
+const NS = "http://www.w3.org/2000/svg";
+function svg(w, h) { const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", `0 0 ${w} ${h}`); return s; }
+function add(parent, tag, attrs, text) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; parent.appendChild(e); return e; }
+
+// Horizontal bar chart: rows [{label, value, hl, parts:[{v,color}]}]
+function hbar(target, rows, fmt, opts = {}) {
+  const lw = opts.labelW || 190, w = 560, rh = 26, h = rows.length * rh + 6;
+  const max = Math.max(...rows.map(r => r.parts ? r.parts.reduce((a, p) => a + p.v, 0) : r.value)) * 1.12;
+  const s = svg(w, h);
+  rows.forEach((r, i) => {
+    const y = i * rh + 4;
+    add(s, "text", { x: lw - 8, y: y + 13, "text-anchor": "end", "font-weight": r.hl ? 650 : 400, fill: r.hl ? css("--text") : css("--text-2") }, r.label);
+    let x = lw;
+    const parts = r.parts || [{ v: r.value, color: r.hl ? css("--ai") : css("--muted") }];
+    parts.forEach((p, j) => {
+      const bw = Math.max(0, p.v / max * (w - lw - 60));
+      if (bw > 0) add(s, "rect", { x, y, width: Math.max(bw - (j < parts.length - 1 ? 2 : 0), 1), height: rh - 10, rx: 3, fill: p.color });
+      x += bw;
+    });
+    add(s, "text", { x: x + 6, y: y + 13, fill: css("--text") }, fmt(r.value));
+    const hit = add(s, "rect", { x: 0, y: y - 2, width: w, height: rh, fill: "transparent" });
+    hit.addEventListener("mousemove", ev => showTip(ev, r.tip || `<b>${esc(r.label)}</b><br>${fmt(r.value)}`));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+  target.replaceChildren(s);
+}
+
+// Line chart: series [{name, color, pts:[[x,y]]}]
+function lines(target, series, o) {
+  const w = o.w || 560, h = o.h || 200, L = 44, R = 12, T = 10, B = 26;
+  const xs = series.flatMap(s => s.pts.map(p => p[0])), ys = series.flatMap(s => s.pts.map(p => p[1]));
+  const x0 = o.xmin ?? Math.min(...xs), x1 = o.xmax ?? Math.max(...xs);
+  const y0 = o.ymin ?? Math.min(...ys), y1 = o.ymax ?? Math.max(...ys);
+  const X = x => L + (x - x0) / ((x1 - x0) || 1) * (w - L - R), Y = y => T + (1 - (y - y0) / ((y1 - y0) || 1)) * (h - T - B);
+  const s = svg(w, h);
+  for (let i = 0; i <= 4; i++) { const v = y0 + (y1 - y0) * i / 4; add(s, "line", { x1: L, x2: w - R, y1: Y(v), y2: Y(v), stroke: css("--grid") }); add(s, "text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end" }, o.yfmt(v)); }
+  (o.xticks || []).forEach(t => add(s, "text", { x: X(t[0]), y: h - 8, "text-anchor": "middle" }, t[1]));
+  series.forEach(se => {
+    if (!se.pts.length) return;
+    add(s, "path", { d: se.pts.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + "," + Y(p[1]).toFixed(1)).join(""), fill: "none", stroke: se.color, "stroke-width": 2, "stroke-linejoin": "round" });
+    if (se.markers) se.pts.forEach(p => add(s, "circle", { cx: X(p[0]), cy: Y(p[1]), r: 4, fill: se.color, stroke: css("--surface"), "stroke-width": 2 }));
+  });
+  if (o.hover) {
+    const cross = add(s, "line", { y1: T, y2: h - B, stroke: css("--muted"), "stroke-dasharray": "3 3", opacity: 0 });
+    const ov = add(s, "rect", { x: L, y: T, width: w - L - R, height: h - T - B, fill: "transparent" });
+    ov.addEventListener("mousemove", ev => {
+      const r = s.getBoundingClientRect(), xv = x0 + ((ev.clientX - r.left) / r.width * w - L) / (w - L - R) * (x1 - x0);
+      const near = series.map(se => se.pts.reduce((a, p) => Math.abs(p[0] - xv) < Math.abs(a[0] - xv) ? p : a, se.pts[0]));
+      cross.setAttribute("x1", X(near[0][0])); cross.setAttribute("x2", X(near[0][0])); cross.setAttribute("opacity", 1);
+      showTip(ev, o.hover(near[0][0]) + series.map((se, i) => `<br><span style="color:${se.color}">●</span> ${esc(se.name)}: ${o.yfmt(near[i][1])}`).join(""));
+    });
+    ov.addEventListener("mouseleave", () => { cross.setAttribute("opacity", 0); hideTip(); });
+  }
+  target.replaceChildren(s);
+}
+
+// ---------------------------------------------------------------- live replay
+const RP = DATA.replay, LK = RP.lookups;
+const BADGE = { hit: ["HIT", "b-hit"], inflight: ["WAIT", "b-wait"], miss_first: ["MISS", "b-miss"], miss_expired: ["MISS", "b-miss"], miss_evicted: ["MISS", "b-miss"] };
+const badge = o => `<span class="badge ${BADGE[o][1]}" title="${o.replace("_", " ")}">${BADGE[o][0]}</span>`;
+let li = 0, di = 0, pi = 0, simT = RP.start, playing = false, last = 0, agg, hist;
+function resetLive() {
+  li = di = pi = 0; simT = RP.start; agg = { n: 0, bh: 0, ah: 0, bms: 0, ams: 0, bup: 0, aup: 0 }; hist = [];
+  ["#feed", "#decisions", "#prefetches"].forEach(s => $(s).replaceChildren()); renderLive();
+}
+function prepend(tb, tr, max = 200) { tb.insertBefore(tr, tb.firstChild); while (tb.children.length > max) tb.lastChild.remove(); }
+function advance(to) {
+  const feed = $("#feed");
+  while (li < LK.length && LK[li][0] <= to) {
+    const [t, c, name, bo, bms, ao, ams] = LK[li++];
+    agg.n++; agg.bms += bms; agg.ams += ams;
+    if (bo === "hit") agg.bh++; if (ao === "hit") agg.ah++;
+    if (bo.startsWith("miss")) agg.bup++; if (ao.startsWith("miss")) agg.aup++;
+    const tr = el("tr", bo !== ao ? { class: "diff" } : {}, `<td>${clock(t).slice(4)}</td><td>${esc(c)}</td><td class="name" title="${esc(name)}">${esc(name)}</td><td>${badge(bo)}</td><td class="num">${fx(bms)}</td><td>${badge(ao)}</td><td class="num">${fx(ams)}</td>`);
+    prepend(feed, tr);
+    if (agg.n % 5 === 0) hist.push([t, agg.bh / agg.n, agg.ah / agg.n]);
+  }
+  while (di < RP.decisions.length && RP.decisions[di].t <= to) {
+    const d = RP.decisions[di++];
+    prepend($("#decisions"), el("tr", {}, `<td class="name" title="${esc(d.name)}">${esc(d.name)}</td><td><div style="display:flex;gap:6px;align-items:center"><div class="bar" style="flex:1"><div style="width:${d.p * 100}%"></div></div><span>${pct(d.p, 0)}</span></div></td><td>${d.refresh ? "<b>refresh</b>" : "let expire"}</td>`), 60);
+  }
+  while (pi < RP.prefetches.length && RP.prefetches[pi].t <= to) {
+    const p = RP.prefetches[pi++]; agg.aup++;
+    prepend($("#prefetches"), el("tr", {}, `<td>${clock(p.t).slice(4)}</td><td class="name">${esc(p.name)}</td><td>${p.source === "followup" ? "follow-up" : "refresh"}</td><td class="num">${p.p == null ? "—" : pct(p.p, 0)}</td>`), 80);
+  }
+}
+function pair(id, b, a) {
+  $(id).innerHTML = `<div><div class="v">${b}</div><div class="who"><i class="dot" style="background:var(--base)"></i>Normal</div></div><div><div class="v">${a}</div><div class="who"><i class="dot" style="background:var(--ai)"></i>AI cache</div></div>`;
+}
+function renderLive() {
+  const n = Math.max(agg.n, 1);
+  $("#k-n").textContent = agg.n.toLocaleString();
+  pair("#k-hit", pct(agg.bh / n), pct(agg.ah / n));
+  pair("#k-lat", fx(agg.bms / n) + " ms", fx(agg.ams / n) + " ms");
+  pair("#k-up", agg.bup, agg.aup);
+  $("#clock").textContent = clock(simT);
+  $("#prog").style.width = ((simT - RP.start) / (RP.end - RP.start) * 100) + "%";
+  if (hist.length > 1) lines($("#live-chart"), [
+    { name: "Normal", color: css("--base"), pts: hist.map(h => [h[0], h[1]]) },
+    { name: "AI cache", color: css("--ai"), pts: hist.map(h => [h[0], h[2]]) }],
+    { w: 420, h: 170, ymin: 0, ymax: 1, xmin: RP.start, xmax: RP.end, yfmt: v => pct(v, 0),
+      xticks: [[RP.start, clock(RP.start).slice(4, 9)], [RP.end, clock(RP.end).slice(4, 9)]], hover: x => clock(x) });
+  else $("#live-chart").innerHTML = `<p class="note">Press Play to start the replay.</p>`;
+}
+function frame(ts) {
+  if (!playing) return;
+  const dt = last ? (ts - last) / 1000 : 0; last = ts;
+  simT = Math.min(RP.end, simT + dt * +$("#speed").value);
+  advance(simT); renderLive();
+  if (simT >= RP.end) { playing = false; $("#play").textContent = "Play"; return; }
+  requestAnimationFrame(frame);
+}
+$("#play").onclick = () => { if (simT >= RP.end) resetLive(); playing = !playing; $("#play").textContent = playing ? "Pause" : "Play"; last = 0; if (playing) requestAnimationFrame(frame); };
+$("#restart").onclick = () => { resetLive(); };
+resetLive();
+
+// ---------------------------------------------------------------- results
+let cap = null, drawn = false;
+const caps = [...new Set(DATA.results.map(r => r.capacity))];
+caps.forEach(c => { const b = el("button", { "aria-pressed": c === cap }, c == null ? "Unlimited cache" : `${c} entries (LRU)`); b.onclick = () => { cap = c; document.querySelectorAll("#capseg button").forEach(x => x.setAttribute("aria-pressed", x === b)); drawResults(true); }; $("#capseg").appendChild(b); });
+
+function drawResults(force) {
+  if (drawn && !force) return; drawn = true;
+  const R = DATA.results.filter(r => r.capacity === cap), by = Object.fromEntries(R.map(r => [r.policy, r]));
+  const b = by.ttl_only, f = by.final;
+  $("#test-note").textContent = `${b.lookups.toLocaleString()} lookups in hours ${W.test[0]}–${W.test[1]}, never seen during training. Final threshold ${DATA.chosen_threshold} was picked on the validation window.`;
+  const tile = (label, bv, av, better) => `<div class="card kpi"><div class="label">${label}</div><div class="pair"><div><div class="v">${bv}</div><div class="who"><i class="dot" style="background:var(--base)"></i>Normal</div></div><div><div class="v">${av}</div><div class="who"><i class="dot" style="background:var(--ai)"></i>AI cache</div></div></div><div class="note" style="margin:6px 0 0">${better}</div></div>`;
+  $("#headline").innerHTML =
+    tile("Cache hit rate", pct(b.hit_rate), pct(f.hit_rate), `${((f.hit_rate - b.hit_rate) * 100).toFixed(1)} points higher`) +
+    tile("Average lookup time", fx(b.mean_ms) + " ms", fx(f.mean_ms) + " ms", `${((1 - f.mean_ms / b.mean_ms) * 100).toFixed(0)}% faster; P95 ${fx(b.p95_ms, 0)} → ${fx(f.p95_ms, 0)} ms`) +
+    tile("Upstream queries / lookup", fx(b.upstream_per_lookup, 3), fx(f.upstream_per_lookup, 3), `${b.upstream_total.toLocaleString()} → ${f.upstream_total.toLocaleString()} queries`) +
+    tile("Prefetches used", "—", pct(f.prefetch_precision), `${f.wasted_prefetches.toLocaleString()} unnecessary of ${f.upstream_prefetch.toLocaleString()}`);
+
+  const cols = [["Strategy", r => esc(r.label)], ["Hit rate", r => pct(r.hit_rate), 1], ["Miss rate", r => pct(r.miss_rate), 1], ["Mean ms", r => fx(r.mean_ms), 1], ["P95 ms", r => fx(r.p95_ms, 0), 1], ["P99 ms", r => fx(r.p99_ms, 0), 1],
+    ["Upstream", r => r.upstream_total.toLocaleString(), 1], ["Per lookup", r => fx(r.upstream_per_lookup, 3), 1], ["Prefetches", r => r.upstream_prefetch.toLocaleString(), 1], ["Prefetch precision", r => pct(r.prefetch_precision, 0), 1], ["Unnecessary", r => r.wasted_prefetches.toLocaleString(), 1]];
+  $("#cmp").innerHTML = `<thead><tr>${cols.map(c => `<th class="${c[2] ? "num" : ""}">${c[0]}</th>`).join("")}</tr></thead><tbody>${R.map(r => `<tr class="${r.policy === "final" ? "hl" : ""}">${cols.map(c => `<td class="${c[2] ? "num" : ""}">${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+
+  const rows = (key, fmt) => R.map(r => ({ label: r.label.replace(/ \(.*\)$/, "").replace(/^Final: .*/, "Final AI cache"), value: r[key], hl: r.policy === "final" }));
+  hbar($("#c-hit"), rows("hit_rate"), v => pct(v));
+  hbar($("#c-lat"), rows("mean_ms"), v => fx(v) + " ms");
+  hbar($("#c-up"), R.map(r => ({ label: r.label.replace(/ \(.*\)$/, "").replace(/^Final: .*/, "Final AI cache"), value: r.upstream_per_lookup, hl: r.policy === "final",
+    parts: [{ v: r.upstream_demand / r.lookups, color: css("--text-2") }, { v: r.upstream_prefetch / r.lookups, color: css("--ai") }],
+    tip: `<b>${esc(r.label)}</b><br>demand misses: ${r.upstream_demand.toLocaleString()}<br>prefetches: ${r.upstream_prefetch.toLocaleString()}` })), v => fx(v, 3));
+
+  // trade-off scatter
+  const tw = 560, th = 260, L = 46, Rr = 14, T = 10, B = 32;
+  const pts = R.map(r => [r.upstream_per_lookup, r.hit_rate, r]);
+  const sw = (cap == null ? DATA.threshold_sweep.filter(s => s.followup) : []);
+  const allx = pts.map(p => p[0]).concat(sw.map(s => s.upstream_per_lookup)), ally = pts.map(p => p[1]).concat(sw.map(s => s.hit_rate));
+  const x0 = Math.min(...allx) * 0.9, x1 = Math.max(...allx) * 1.05, y0 = Math.floor(Math.min(...ally) * 20) / 20, y1 = Math.min(1, Math.ceil(Math.max(...ally) * 20) / 20);
+  const X = x => L + (x - x0) / (x1 - x0) * (tw - L - Rr), Y = y => T + (1 - (y - y0) / (y1 - y0)) * (th - T - B);
+  const s = svg(tw, th);
+  for (let i = 0; i <= 4; i++) { const v = y0 + (y1 - y0) * i / 4; add(s, "line", { x1: L, x2: tw - Rr, y1: Y(v), y2: Y(v), stroke: css("--grid") }); add(s, "text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end" }, pct(v, 0)); }
+  for (let i = 0; i <= 4; i++) { const v = x0 + (x1 - x0) * i / 4; add(s, "text", { x: X(v), y: th - 14, "text-anchor": "middle" }, v.toFixed(2)); }
+  add(s, "text", { x: (L + tw) / 2, y: th, "text-anchor": "middle" }, "upstream queries per lookup");
+  if (sw.length) {
+    add(s, "path", { d: sw.map((p, i) => (i ? "L" : "M") + X(p.upstream_per_lookup) + "," + Y(p.hit_rate)).join(""), fill: "none", stroke: css("--ai"), "stroke-width": 2, opacity: 0.5 });
+    sw.forEach(p => { const c = add(s, "circle", { cx: X(p.upstream_per_lookup), cy: Y(p.hit_rate), r: 3, fill: css("--ai"), opacity: 0.6 });
+      c.addEventListener("mousemove", ev => showTip(ev, `AI cache, threshold ${p.threshold}<br>hit ${pct(p.hit_rate)} · ${fx(p.upstream_per_lookup, 3)} upstream/lookup`)); c.addEventListener("mouseleave", hideTip); });
+  }
+  pts.forEach(([x, y, r]) => {
+    const isF = r.policy === "final", isB = r.policy === "ttl_only";
+    const c = add(s, "circle", { cx: X(x), cy: Y(y), r: isF || isB ? 6 : 5, fill: isF ? css("--ai") : isB ? css("--base") : css("--muted"), stroke: css("--surface"), "stroke-width": 2 });
+    const lab = r.label.replace(/ \(.*\)$/, "").replace(/^Final: .*/, "Final AI cache");
+    const right = X(x) > tw * 0.6;
+    add(s, "text", { x: X(x) + (right ? -8 : 8), y: Y(y) + 4, "text-anchor": right ? "end" : "start", fill: isF || isB ? css("--text") : css("--text-2") }, lab);
+    const hit = add(s, "circle", { cx: X(x), cy: Y(y), r: 12, fill: "transparent" });
+    hit.addEventListener("mousemove", ev => showTip(ev, `<b>${esc(r.label)}</b><br>hit ${pct(r.hit_rate)} · ${fx(x, 3)} upstream/lookup`)); hit.addEventListener("mouseleave", hideTip);
+  });
+  $("#c-trade").replaceChildren(s);
+
+  // hourly
+  const hours = Object.keys(b.hourly_hit_rate).map(Number).sort((a, c) => a - c);
+  const ser = (r, name, color) => ({ name, color, markers: true, pts: hours.filter(h => r.hourly_hit_rate[h] != null).map(h => [h, r.hourly_hit_rate[h]]) });
+  lines($("#c-hour"), [ser(b, "Normal cache", css("--base")), ser(f, "AI cache", css("--ai"))],
+    { w: 1100, h: 220, ymin: 0, ymax: 1, yfmt: v => pct(v, 0), xticks: hours.filter((h, i) => i % 2 === 0).map(h => [h, clock(h * 3600).slice(0, 9)]), hover: h => clock(h * 3600).slice(0, 9) });
+
+  if (force) return;
+  $("#findings").innerHTML = DATA.findings.map(x => `<div class="finding"><span class="tag ${x.kind}">${x.kind}</span><div>${esc(x.text)}</div></div>`).join("");
+  const last = DATA.ml_rounds[DATA.ml_rounds.length - 1];
+  $("#ml-note").textContent = `Validation window, ${last.validation_rows.toLocaleString()} expiry decisions, threshold 0.5. Accuracy alone is not the goal: the cache results above are what count.`;
+  $("#mltab").innerHTML = `<thead><tr><th>Model</th><th class="num">Precision</th><th class="num">Recall</th><th class="num">F1</th><th class="num">ROC-AUC</th></tr></thead><tbody>` +
+    Object.entries(last.models).map(([k, m]) => `<tr class="${k === "decision_tree" ? "hl" : ""}"><td>${k.replace("_", " ")}</td><td class="num">${fx(m.precision, 3)}</td><td class="num">${fx(m.recall, 3)}</td><td class="num">${fx(m.f1, 3)}</td><td class="num">${fx(m.roc_auc, 3)}</td></tr>`).join("") + "</tbody>";
+  hbar($("#c-imp"), DATA.feature_importance.filter(f => f[1] > 0.005).map((f, i) => ({ label: f[0], value: f[1], hl: i === 0 })), v => pct(v, 0), { labelW: 150 });
+  const fu = DATA.followup;
+  $("#fu-note").textContent = `P(B is looked up within 30 s after A, by the same client), learned from the training window. ${fu.names} domains have a predictable follower. On the test window, ${pct(fu.test_eval.precision)} of predictions with p ≥ ${fu.test_eval.threshold} came true.`;
+  $("#pairs").innerHTML = `<thead><tr><th>After</th><th>Comes</th><th class="num">P</th></tr></thead><tbody>${fu.top_pairs.map(p => `<tr><td class="name">${esc(p.a)}</td><td class="name">${esc(p.b)}</td><td class="num">${pct(p.p, 0)}</td></tr>`).join("")}</tbody>`;
+  $("#rules").textContent = DATA.tree_rules;
+}
+</script>
+</body>
+</html>

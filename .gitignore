@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+data/synth/
+data/live/
+*.egg-info/
