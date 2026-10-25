@@ -8,7 +8,7 @@ the prediction.
 ## One-time setup (before the presentation)
 
 ```bat
-cd C:\Users\Hanuman\Documents\Chaitanya\CN
+cd dns-query-prediction
 py -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt

@@ -17,7 +17,7 @@ by answering eight questions:
 > evaluation here runs on a **seeded synthetic trace** (48 hours, 40 clients,
 > about 83,000 lookups), not on the Thapar campus trace the original used, so
 > its numbers differ from the original Thapar results. Both sets are given in
-> section 7 and labelled. See `docs/RECONSTRUCTION.md` for what was rebuilt
+> section 7 and labelled. See [RECONSTRUCTION.md](RECONSTRUCTION.md) for what was rebuilt
 > faithfully and what was guessed.
 
 ---
@@ -538,7 +538,7 @@ this project does differently:
 ## Appendix: how to reproduce
 
 ```bat
-cd C:\Users\Hanuman\Documents\Chaitanya\CN
+cd dns-query-prediction
 py -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -548,4 +548,4 @@ python -m pytest           :: tests
 ```
 
 Then open `dashboard\index.html` and `demo\output\report.html` in a browser.
-More detail: `README.md`, `DEMO.md`, `docs/RECONSTRUCTION.md`.
+More detail: [README.md](../README.md), [DEMO.md](DEMO.md), [RECONSTRUCTION.md](RECONSTRUCTION.md).

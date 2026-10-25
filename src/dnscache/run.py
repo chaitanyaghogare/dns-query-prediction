@@ -2,6 +2,7 @@
 
     python -m dnscache.run                      # default synthetic experiment
     python -m dnscache.run --config configs/my_trace.json
+    python -m dnscache.run --config configs/thapar.json    # real campus pcaps
 
 Chronological split (no shuffling): the models are trained on the train
 window, thresholds are checked on the validation window, and every headline
@@ -12,13 +13,14 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import time
 from pathlib import Path
 
 import numpy as np
 
 from .data import io
-from .data.adapters import canonical
+from .data.adapters import canonical, pcap, tshark
 from .data.assess import assess
 from .predict import models as M
 from .predict.features import FEATURES, FutureIndex
@@ -45,7 +47,10 @@ def load_config(path: str | Path | None) -> dict:
 def load_data(cfg: dict):
     name = cfg["name"]
     if cfg.get("trace_csv"):
-        queries = canonical.load(ROOT / cfg["trace_csv"])
+        path = ROOT / cfg["trace_csv"]
+        with open(path, encoding="utf-8") as f:
+            header = f.readline()
+        queries = (tshark if "frame.time_epoch" in header else canonical).load(path)
         ttl = {}
         if cfg.get("ttl_csv"):
             with open(ROOT / cfg["ttl_csv"], newline="") as f:
@@ -55,11 +60,26 @@ def load_data(cfg: dict):
     cat = ROOT / "data" / name / "catalogue.json"
     if trace.exists() and cat.exists():
         return io.read_trace(trace), json.loads(cat.read_text())["ttl"]
+    if cfg.get("pcap_dir"):                      # first run: convert the captures once
+        log(f"converting captures in {cfg['pcap_dir']} (only done once)")
+        return pcap.convert(ROOT / cfg["pcap_dir"], ROOT / "data" / name, cfg.get("client_sample", 1.0),
+                            cfg.get("utc_offset_h", 0.0), cfg.get("exclude_clients", ()), progress=log)
     scfg = SynthConfig(seed=cfg["seed"], **cfg.get("synth", {}))
     queries, ttl = generate(scfg)
     io.write_trace(trace, queries, {"source": "synthetic", "seed": scfg.seed})
     save_catalogue(cat, ttl, scfg)
     return queries, ttl
+
+
+def resolve_windows(cfg: dict, queries) -> None:
+    """Turn ``windows_frac`` (shares of the trace) into ``windows_h``, for traces of unknown length."""
+    if not cfg.get("windows_frac"):
+        return
+    t0, t1 = queries[0].ts / 3600, queries[-1].ts / 3600
+    at = lambda f: math.ceil(t1 * 100 + 1e-9) / 100 if f >= 1 else round(t0 + f * (t1 - t0), 2)
+    cfg["windows_h"] = {k: [at(a), at(b)] for k, (a, b) in cfg["windows_frac"].items()}
+    if cfg.get("replay_start_frac") is not None:
+        cfg["replay_start_h"] = at(cfg["replay_start_frac"])
 
 
 def run_policy(queries, up, policy, cfg, window, capacity=None, future=None, record=None) -> Simulator:
@@ -83,7 +103,6 @@ def main(argv=None) -> dict:
     cfg = load_config(args.config)
     name = cfg["name"]
     H = 3600
-    w = {k: (v[0] * H, v[1] * H) for k, v in cfg["windows_h"].items()}
     out_dir = ROOT / "experiments" / "results" / name
     model_dir = ROOT / "models" / name
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -91,6 +110,10 @@ def main(argv=None) -> dict:
 
     # 1. data -------------------------------------------------------------
     queries, ttl = load_data(cfg)
+    if not queries:
+        raise SystemExit("the trace is empty: check the input path in the config")
+    resolve_windows(cfg, queries)
+    w = {k: (v[0] * H, v[1] * H) for k, v in cfg["windows_h"].items()}
     quality = assess(queries)
     log(f"trace: {quality['rows']} lookups, {quality['distinct_keys']} names, {quality['duration_h']} h")
     uc = cfg["upstream"]

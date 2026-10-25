@@ -46,3 +46,69 @@ def test_canonical_adapter_keeps_relative_times(tmp_path):
     p = tmp_path / "x.csv"
     p.write_text("ts,client,qname\n10,c,a.com\n5,c,b.com\n")
     assert [x.ts for x in canonical.load(p)] == [5.0, 10.0]
+
+
+def _pcap(path, packets, pcapng=False):
+    """Write a tiny capture of DNS-over-UDP/IPv4/Ethernet packets: (ts, src, dst, sport, dport, dns)."""
+    import struct
+
+    def frame(src, dst, sport, dport, dns):
+        udp = struct.pack("!HHHH", sport, dport, 8 + len(dns), 0) + dns
+        ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(udp), 0, 0, 64, 17, 0,
+                         bytes(map(int, src.split("."))), bytes(map(int, dst.split("."))))
+        return b"\0" * 12 + b"\x08\x00" + ip + udp
+
+    out = bytearray()
+    if pcapng:
+        out += struct.pack("<II I HHq I", 0x0A0D0D0A, 28, 0x1A2B3C4D, 1, 0, -1, 28)
+        out += struct.pack("<IIHHI I", 1, 20, 1, 0, 65535, 20)
+        for ts, *rest in packets:
+            f = frame(*rest)
+            pad = (4 - len(f) % 4) % 4
+            us = int(ts * 1e6)
+            blen = 32 + len(f) + pad
+            out += struct.pack("<IIIIIII", 6, blen, 0, us >> 32, us & 0xFFFFFFFF, len(f), len(f)) + f + b"\0" * pad
+            out += struct.pack("<I", blen)
+    else:
+        out += struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+        for ts, *rest in packets:
+            f = frame(*rest)
+            out += struct.pack("<IIII", int(ts), int(round(ts % 1 * 1e6)), len(f), len(f)) + f
+    path.write_bytes(bytes(out))
+
+
+def _response(name, ttl):
+    import struct
+    from dnscache.collect.dnsmsg import build_query
+    q = bytearray(build_query(name, qid=7))
+    struct.pack_into("!HH", q, 2, 0x8180, 1)
+    q[6:8] = b"\x00\x01"
+    return bytes(q) + b"\xc0\x0c" + struct.pack("!HHIH", 1, 1, ttl, 4) + b"\x01\x02\x03\x04"
+
+
+def test_pcap_adapter_reads_queries_and_ttls(tmp_path):
+    from dnscache.collect.dnsmsg import build_query
+    from dnscache.data.adapters import pcap
+    t0 = 1760918400.0                                   # a Monday 00:00 UTC
+    pk = [(t0 + 1.0, "10.0.0.1", "10.0.0.53", 5000, 53, build_query("Example.com", "A")),
+          (t0 + 1.02, "10.0.0.53", "10.0.0.1", 53, 5000, _response("example.com", 120)),
+          (t0 + 2.5, "10.0.0.2", "10.0.0.53", 5001, 53, build_query("ipv6.example.com", "AAAA")),
+          (t0 + 3.0, "10.0.0.2", "10.0.0.53", 5001, 80, b"not dns")]
+    for ng in (False, True):
+        p = tmp_path / ("x.pcapng" if ng else "x.pcap")
+        _pcap(p, pk, ng)
+        qs, ttl = pcap.load(p)
+        assert [(q.client, q.qname, q.qtype) for q in qs] == [
+            ("10.0.0.1", "example.com", "A"), ("10.0.0.2", "ipv6.example.com", "AAAA")]
+        assert abs(qs[0].ts - 1.0) < 1e-3 and abs(qs[1].ts - 2.5) < 1e-3
+        assert ttl == {"example.com|A": 120}
+    assert [q.client for q in pcap.load(tmp_path / "x.pcap", exclude=["10.0.0.1"])[0]] == ["10.0.0.2"]
+    # IST shift moves the trace to 05:30 local time
+    assert abs(pcap.load(tmp_path / "x.pcap", utc_offset_h=5.5)[0][0].ts - (5.5 * 3600 + 1)) < 1e-3
+
+
+def test_pcap_client_sample_is_deterministic():
+    from dnscache.data.adapters import pcap
+    ips = [f"10.0.{i // 256}.{i % 256}" for i in range(2000)]
+    kept = [ip for ip in ips if pcap.sampled(ip, 0.1)]
+    assert 150 < len(kept) < 250 and kept == [ip for ip in ips if pcap.sampled(ip, 0.1)]

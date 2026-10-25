@@ -1,7 +1,7 @@
 # What was rebuilt, and how faithfully
 
 The original code is on another laptop. This version was rebuilt on
-2026-10-22 from the notes in `knowledge/` (current_state.md, architecture.md,
+2026-10-22 from the notes in [`original-notes/`](original-notes/) (current_state.md, architecture.md,
 ML.md, project.md, agents.md). Nothing from the original code was available,
 so **no file here is a copy**; everything was rewritten to match the notes.
 
@@ -26,7 +26,9 @@ so **no file here is a copy**; everything was rewritten to match the notes.
   answer mix and a 20-minute replay; Results & Insights section with findings
   labelled Measured / Interpretation / Hypothesis, limitations and future work.
 * Logging pass-through forwarder (`collect/forwarder.py`).
-* Adapters for canonical CSV and tshark exports.
+* Adapters for canonical CSV, tshark exports and raw .pcap/.pcapng files
+  (added 2026-10-25; `configs/thapar.json` reads the Thapar captures from
+  `data/thapar/raw/`).
 
 ## Guessed or simplified (the notes did not say how)
 
@@ -52,7 +54,7 @@ so **no file here is a copy**; everything was rewritten to match the notes.
   replay" tab plays back pre-computed lookups instead, and
   `python -m dnscache.app` serves it with the standard library only. No
   fastapi/uvicorn dependency.
-* The pcap and LANL adapters (tshark export covers pcap files).
+* The LANL adapter.
 * Workload analysis by TTL band / domain frequency (section F of the old page).
 * `docs/decisions.md` D1–D31 and `PROJECT_EXPLAINED.md`; their key points are
   folded into README.md and this file.

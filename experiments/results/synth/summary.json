@@ -177,7 +177,7 @@
    "policy": "ttl_only",
    "label": "Normal TTL cache",
    "capacity": null,
-   "runtime_s": 0.47
+   "runtime_s": 0.63
   },
   {
    "lookups": 36000,
@@ -225,7 +225,7 @@
    "policy": "unbound_prefetch",
    "label": "Unbound-style prefetch",
    "capacity": null,
-   "runtime_s": 0.5
+   "runtime_s": 0.44
   },
   {
    "lookups": 36000,
@@ -273,7 +273,7 @@
    "policy": "refresh_if_used",
    "label": "Refresh-if-used rule",
    "capacity": null,
-   "runtime_s": 0.66
+   "runtime_s": 0.68
   },
   {
    "lookups": 36000,
@@ -321,7 +321,7 @@
    "policy": "followup_only",
    "label": "TTL cache + follow-up prefetch",
    "capacity": null,
-   "runtime_s": 1.22
+   "runtime_s": 0.78
   },
   {
    "lookups": 36000,
@@ -369,7 +369,7 @@
    "policy": "ml_refresh",
    "label": "ML refresh (decision tree)",
    "capacity": null,
-   "runtime_s": 1.34
+   "runtime_s": 0.7
   },
   {
    "lookups": 36000,
@@ -419,7 +419,7 @@
    "policy": "final",
    "label": "Final: ML refresh (p>=0.8) + follow-up (p>=0.7)",
    "capacity": null,
-   "runtime_s": 1.89
+   "runtime_s": 1.3
   },
   {
    "lookups": 36000,
@@ -467,7 +467,7 @@
    "policy": "oracle_refresh",
    "label": "Oracle (knows the future)",
    "capacity": null,
-   "runtime_s": 1.04
+   "runtime_s": 0.52
   },
   {
    "lookups": 36000,
@@ -511,7 +511,7 @@
    "policy": "ttl_only",
    "label": "Normal TTL cache",
    "capacity": 40,
-   "runtime_s": 0.89
+   "runtime_s": 0.63
   },
   {
    "lookups": 36000,
@@ -559,7 +559,7 @@
    "policy": "unbound_prefetch",
    "label": "Unbound-style prefetch",
    "capacity": 40,
-   "runtime_s": 0.92
+   "runtime_s": 0.45
   },
   {
    "lookups": 36000,
@@ -607,7 +607,7 @@
    "policy": "refresh_if_used",
    "label": "Refresh-if-used rule",
    "capacity": 40,
-   "runtime_s": 1.12
+   "runtime_s": 0.52
   },
   {
    "lookups": 36000,
@@ -655,7 +655,7 @@
    "policy": "followup_only",
    "label": "TTL cache + follow-up prefetch",
    "capacity": 40,
-   "runtime_s": 1.18
+   "runtime_s": 0.6
   },
   {
    "lookups": 36000,
@@ -703,7 +703,7 @@
    "policy": "ml_refresh",
    "label": "ML refresh (decision tree)",
    "capacity": 40,
-   "runtime_s": 1.29
+   "runtime_s": 0.59
   },
   {
    "lookups": 36000,
@@ -753,7 +753,7 @@
    "policy": "final",
    "label": "Final: ML refresh (p>=0.8) + follow-up (p>=0.7)",
    "capacity": 40,
-   "runtime_s": 1.62
+   "runtime_s": 0.73
   },
   {
    "lookups": 36000,
@@ -801,7 +801,7 @@
    "policy": "oracle_refresh",
    "label": "Oracle (knows the future)",
    "capacity": 40,
-   "runtime_s": 0.99
+   "runtime_s": 0.48
   }
  ],
  "threshold_sweep": [
@@ -13767,5 +13767,5 @@
    }
   ]
  },
- "generated": "2026-10-25 11:12"
+ "generated": "2026-10-25 21:21"
 }

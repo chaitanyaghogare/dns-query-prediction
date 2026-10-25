@@ -1,0 +1,9 @@
+{
+  "name": "thapar",
+  "pcap_dir": "data/thapar/raw",
+  "client_sample": 0.1,
+  "exclude_clients": ["172.31.1.6"],
+  "utc_offset_h": 5.5,
+  "windows_h": {"train": [143.9, 159.9], "validation": [159.9, 165.9], "test": [165.9, 175.92]},
+  "replay_start_h": 175.3
+}
